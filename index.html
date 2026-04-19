@@ -129,14 +129,14 @@ export default function App() {
         setLastPeriodDate(data.lastPeriodDate || new Date().toISOString().split('T')[0]);
         setWaterCount(data.waterCount || 0);
       }
-    });
+    }, (err) => console.error("Stats fetch error:", err));
 
     const journalCol = collection(db, 'artifacts', appId, 'users', user.uid, 'journal');
     const unsubJournal = onSnapshot(journalCol, (snapshot) => {
       const entries = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
       const sorted = entries.sort((a, b) => b.timestamp - a.timestamp);
       setJournalEntries(sorted);
-    }, (err) => console.error(err));
+    }, (err) => console.error("Journal fetch error:", err));
 
     return () => {
       unsubStats();
@@ -184,12 +184,11 @@ export default function App() {
   };
 
   const getPhaseData = (day, totalLength) => {
-    // Proportional phase calculation
     const progress = day / totalLength;
-    if (progress <= 0.2) return CYCLE_INSIGHTS.menstrual; // First 20%
-    if (progress <= 0.45) return CYCLE_INSIGHTS.follicular; // Up to 45%
-    if (progress <= 0.55) return CYCLE_INSIGHTS.ovulation; // Mid-cycle peak
-    return CYCLE_INSIGHTS.luteal; // Second half
+    if (progress <= 0.2) return CYCLE_INSIGHTS.menstrual;
+    if (progress <= 0.45) return CYCLE_INSIGHTS.follicular;
+    if (progress <= 0.55) return CYCLE_INSIGHTS.ovulation;
+    return CYCLE_INSIGHTS.luteal;
   };
 
   const currentPhase = getPhaseData(cycleDay, cycleLength);
