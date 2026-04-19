@@ -39,7 +39,7 @@ const firebaseConfig = JSON.parse(__firebase_config);
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'lumina-tracker-101';
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'scribblelogue-tracker-101';
 
 // --- Science-Backed Positive Data ---
 const CYCLE_INSIGHTS = {
@@ -209,7 +209,7 @@ export default function App() {
       {/* Header */}
       <header className="px-6 pt-8 pb-4 flex justify-between items-start max-w-2xl mx-auto">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Lumina</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Scribblelogue</h1>
           <p className="text-slate-500 font-medium italic">Empowering your rhythm, Snigdha ✨</p>
         </div>
         <button 
@@ -398,8 +398,8 @@ export default function App() {
       </main>
 
       <footer className="text-center mt-12 text-slate-400 text-xs px-6">
-        <p className="max-w-xs mx-auto">Lumina tracks your natural biological markers to provide supportive, science-backed lifestyle nudges.</p>
-        <p className="mt-4 font-bold uppercase tracking-widest text-[10px]">Lumina v2.0</p>
+        <p className="max-w-xs mx-auto">Track your natural biological markers to learn supportive, science-backed lifestyle nudges.</p>
+        <p className="mt-4 font-bold uppercase tracking-widest text-[10px]">scribblelogue v1.0</p>
       </footer>
     </div>
   );
