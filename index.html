@@ -13,7 +13,8 @@ import {
   Utensils,
   Footprints,
   Settings2,
-  X
+  X,
+  HeartPulse
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -46,40 +47,48 @@ const CYCLE_INSIGHTS = {
   menstrual: {
     phase: "Menstrual Phase",
     hormone: "Progesterone Drop",
-    fact: "Snigdha, your body is in a 'reset' mode. Since your progesterone has dropped, it's the perfect time for restorative movement to clear your mind.",
+    fact: "Hey kid, your body is in a 'reset' mode. Since your progesterone has dropped, it's the perfect time for restorative movement to clear your mind.",
     food: "Focus on iron-rich foods like spinach or lentils to keep your oxygen levels high and energy steady.",
     walk: "A gentle 20-minute rhythmic walk in nature will help release endorphins.",
     mood: "Reflective and Intuitive",
+    waterNote: "Drinking 2.5L today helps your body with circulation during this reset.",
+    breathePrompt: "Inhale for 4, Hold for 4, Exhale for 4. Ground your energy.",
     bg: "bg-rose-50",
     accent: "text-rose-600"
   },
   follicular: {
     phase: "Follicular Phase",
     hormone: "Estrogen Rising",
-    fact: "Snigdha, your estrogen is climbing! This naturally boosts your serotonin. Use this energy to try a new workout or tackle a creative project.",
+    fact: "Hey kid, your estrogen is climbing! This naturally boosts your serotonin. Use this energy to try a new workout or tackle a creative project.",
     food: "Fermented foods like yogurt or kimchi support estrogen metabolism for a glowing complexion.",
     walk: "Power walk! 30 minutes at a brisk pace will capitalize on your rising stamina.",
     mood: "Energetic and Creative",
+    waterNote: "Aim for 2.2L to keep your cells hydrated for that rising estrogen glow.",
+    breathePrompt: "Deep belly breaths to fuel your creative fire.",
     bg: "bg-blue-50",
     accent: "text-blue-600"
   },
   ovulation: {
     phase: "Ovulatory Phase",
     hormone: "LH & Testosterone Peak",
-    fact: "You are at your most social and confident today, Snigdha! Your testosterone peak enhances your strength and verbal fluidity.",
+    fact: "You are at your most social and confident today, Kid! Your testosterone peak enhances your strength and verbal fluidity.",
     food: "Light, hydrating foods like berries and cucumber support your body’s high metabolic activity.",
     walk: "Social walk! Invite a friend for a 40-minute stroll; your communication skills are peaking.",
     mood: "Confident and Magnetic",
+    waterNote: "Try for 3L today to support your peak metabolic activity and keep your energy high.",
+    breathePrompt: "Slow exhales to stay centered in your social power.",
     bg: "bg-purple-50",
     accent: "text-purple-600"
   },
   luteal: {
     phase: "Luteal Phase",
     hormone: "Progesterone Peak",
-    fact: "Progesterone is the 'chilled out' hormone. It’s helping you feel more grounded. Snigdha, use this time to organize and find comfort in routine.",
+    fact: "Progesterone is the 'chilled out' hormone. It’s helping you feel more grounded. Kid, use this time to organize and find comfort in routine.",
     food: "Complex carbs like sweet potatoes help maintain steady blood sugar and keep those feel-good hormones stable.",
     walk: "Grounding walk. 25 minutes of slow, intentional walking helps maintain your natural calm.",
     mood: "Grounded and Task-Oriented",
+    waterNote: "Consistently sipping 2.5L helps your body manage progesterone's fluid shifts.",
+    breathePrompt: "4-7-8 breathing: Inhale 4, Hold 7, Exhale 8. Embrace the calm.",
     bg: "bg-amber-50",
     accent: "text-amber-600"
   }
@@ -95,6 +104,7 @@ export default function App() {
   const [journalEntries, setJournalEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
+  const [isBreathing, setIsBreathing] = useState(false);
 
   // Auth Initialization
   useEffect(() => {
@@ -156,7 +166,6 @@ export default function App() {
     const diffTime = today.getTime() - start.getTime();
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
     
-    // Calculate day within the cycle (1 to cycleLength)
     const currentDay = ((diffDays % cycleLength) + cycleLength) % cycleLength + 1;
     setCycleDay(currentDay);
   }, [lastPeriodDate, cycleLength]);
@@ -210,7 +219,7 @@ export default function App() {
       <header className="px-6 pt-8 pb-4 flex justify-between items-start max-w-2xl mx-auto">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">Scribblelogue</h1>
-          <p className="text-slate-500 font-medium italic">Empowering your rhythm, Snigdha ✨</p>
+          <p className="text-slate-500 font-medium italic">Master your emotions, Kid ✨</p>
         </div>
         <button 
           onClick={() => setShowSettings(!showSettings)}
@@ -304,6 +313,34 @@ export default function App() {
           </div>
         </section>
 
+        {/* Breathe & Reset Tile */}
+        <section className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 relative overflow-hidden transition-all group">
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <h3 className="font-bold text-lg flex items-center gap-2">
+                <HeartPulse className="text-rose-400" size={20} />
+                Breathe & Reset
+              </h3>
+              <p className="text-sm text-slate-500 mt-1">Science-backed grounding</p>
+            </div>
+            <button 
+              onClick={() => setIsBreathing(!isBreathing)}
+              className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all ${isBreathing ? 'bg-rose-500 text-white ring-4 ring-rose-100' : 'bg-rose-50 text-rose-600 hover:bg-rose-100'}`}
+            >
+              {isBreathing ? 'Resetting...' : 'Start Now'}
+            </button>
+          </div>
+          
+          <div className="flex flex-col items-center justify-center py-4 text-center">
+            <div className={`transition-all duration-3000 ease-in-out ${isBreathing ? 'scale-150 opacity-100' : 'scale-100 opacity-60'}`}>
+               <Wind size={40} className={currentPhase.accent} />
+            </div>
+            <p className={`mt-6 text-sm font-medium transition-all ${isBreathing ? 'text-slate-900' : 'text-slate-400'}`}>
+              {currentPhase.breathePrompt}
+            </p>
+          </div>
+        </section>
+
         {/* Interactive Stats (Water & Mood) */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Water Tracker */}
@@ -323,6 +360,13 @@ export default function App() {
                   className={`w-4 rounded-full transition-all duration-500 ${i < waterCount ? 'bg-blue-400 h-16' : 'bg-blue-50 h-6'}`}
                 />
               ))}
+            </div>
+
+            <div className="bg-blue-50/50 rounded-2xl p-3 mb-6 border border-blue-50">
+               <p className="text-xs text-blue-700 font-medium leading-relaxed">
+                 <span className="font-bold uppercase tracking-tighter">Pro Tip: </span>
+                 {currentPhase.waterNote}
+               </p>
             </div>
 
             <div className="flex gap-2">
@@ -348,7 +392,7 @@ export default function App() {
                 <Wind className="text-emerald-500" size={20} />
                 Vibe Check
               </h3>
-              <p className="text-sm text-slate-500 mb-4">Science-backed mood...</p>
+              <p className="text-sm text-slate-500 mb-4">Science-backed emotions...</p>
             </div>
             <div className="flex flex-col items-center py-4">
               <div className={`p-5 rounded-3xl mb-3 shadow-inner ${currentPhase.bg} ${currentPhase.accent}`}>
@@ -368,7 +412,7 @@ export default function App() {
           <textarea 
             value={journalText}
             onChange={(e) => setJournalText(e.target.value)}
-            placeholder={`How's your Day ${cycleDay} going, Snigdha?`}
+            placeholder={`How's your Day ${cycleDay} going, Kiddo?`}
             className="w-full h-32 p-4 rounded-2xl bg-slate-50 border-none focus:ring-2 focus:ring-indigo-100 resize-none mb-4 placeholder:text-slate-300"
           />
           <button 
@@ -399,7 +443,7 @@ export default function App() {
 
       <footer className="text-center mt-12 text-slate-400 text-xs px-6">
         <p className="max-w-xs mx-auto">Track your natural biological markers to learn supportive, science-backed lifestyle nudges.</p>
-        <p className="mt-4 font-bold uppercase tracking-widest text-[10px]">scribblelogue v1.0</p>
+        <p className="mt-4 font-bold uppercase tracking-widest text-[10px]">scribblelogue v1.1</p>
       </footer>
     </div>
   );
