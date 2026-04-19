@@ -1,450 +1,313 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  Droplets, 
-  Calendar, 
-  BookOpen, 
-  Wind, 
-  ChevronLeft, 
-  ChevronRight, 
-  Plus, 
-  Minus, 
-  CheckCircle2,
-  Sparkles,
-  Utensils,
-  Footprints,
-  Settings2,
-  X,
-  HeartPulse
-} from 'lucide-react';
-import { initializeApp } from 'firebase/app';
-import { 
-  getFirestore, 
-  doc, 
-  setDoc, 
-  getDoc, 
-  collection, 
-  onSnapshot, 
-  query, 
-  orderBy,
-  addDoc
-} from 'firebase/firestore';
-import { 
-  getAuth, 
-  signInAnonymously, 
-  signInWithCustomToken, 
-  onAuthStateChanged 
-} from 'firebase/auth';
-
-// --- Firebase Configuration ---
-const firebaseConfig = JSON.parse(__firebase_config);
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'scribblelogue-tracker-101';
-
-// --- Science-Backed Positive Data ---
-const CYCLE_INSIGHTS = {
-  menstrual: {
-    phase: "Menstrual Phase",
-    hormone: "Progesterone Drop",
-    fact: "Hey kid, your body is in a 'reset' mode. Since your progesterone has dropped, it's the perfect time for restorative movement to clear your mind.",
-    food: "Focus on iron-rich foods like spinach or lentils to keep your oxygen levels high and energy steady.",
-    walk: "A gentle 20-minute rhythmic walk in nature will help release endorphins.",
-    mood: "Reflective and Intuitive",
-    waterNote: "Drinking 2.5L today helps your body with circulation during this reset.",
-    breathePrompt: "Inhale for 4, Hold for 4, Exhale for 4. Ground your energy.",
-    bg: "bg-rose-50",
-    accent: "text-rose-600"
-  },
-  follicular: {
-    phase: "Follicular Phase",
-    hormone: "Estrogen Rising",
-    fact: "Hey kid, your estrogen is climbing! This naturally boosts your serotonin. Use this energy to try a new workout or tackle a creative project.",
-    food: "Fermented foods like yogurt or kimchi support estrogen metabolism for a glowing complexion.",
-    walk: "Power walk! 30 minutes at a brisk pace will capitalize on your rising stamina.",
-    mood: "Energetic and Creative",
-    waterNote: "Aim for 2.2L to keep your cells hydrated for that rising estrogen glow.",
-    breathePrompt: "Deep belly breaths to fuel your creative fire.",
-    bg: "bg-blue-50",
-    accent: "text-blue-600"
-  },
-  ovulation: {
-    phase: "Ovulatory Phase",
-    hormone: "LH & Testosterone Peak",
-    fact: "You are at your most social and confident today, Kid! Your testosterone peak enhances your strength and verbal fluidity.",
-    food: "Light, hydrating foods like berries and cucumber support your body’s high metabolic activity.",
-    walk: "Social walk! Invite a friend for a 40-minute stroll; your communication skills are peaking.",
-    mood: "Confident and Magnetic",
-    waterNote: "Try for 3L today to support your peak metabolic activity and keep your energy high.",
-    breathePrompt: "Slow exhales to stay centered in your social power.",
-    bg: "bg-purple-50",
-    accent: "text-purple-600"
-  },
-  luteal: {
-    phase: "Luteal Phase",
-    hormone: "Progesterone Peak",
-    fact: "Progesterone is the 'chilled out' hormone. It’s helping you feel more grounded. Kid, use this time to organize and find comfort in routine.",
-    food: "Complex carbs like sweet potatoes help maintain steady blood sugar and keep those feel-good hormones stable.",
-    walk: "Grounding walk. 25 minutes of slow, intentional walking helps maintain your natural calm.",
-    mood: "Grounded and Task-Oriented",
-    waterNote: "Consistently sipping 2.5L helps your body manage progesterone's fluid shifts.",
-    breathePrompt: "4-7-8 breathing: Inhale 4, Hold 7, Exhale 8. Embrace the calm.",
-    bg: "bg-amber-50",
-    accent: "text-amber-600"
-  }
-};
-
-export default function App() {
-  const [user, setUser] = useState(null);
-  const [cycleDay, setCycleDay] = useState(1);
-  const [cycleLength, setCycleLength] = useState(28);
-  const [lastPeriodDate, setLastPeriodDate] = useState(new Date().toISOString().split('T')[0]);
-  const [waterCount, setWaterCount] = useState(0);
-  const [journalText, setJournalText] = useState("");
-  const [journalEntries, setJournalEntries] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showSettings, setShowSettings] = useState(false);
-  const [isBreathing, setIsBreathing] = useState(false);
-
-  // Auth Initialization
-  useEffect(() => {
-    const initAuth = async () => {
-      try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
-        } else {
-          await signInAnonymously(auth);
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scribblelogue - Period Tracker</title>
+    <!-- Tailwind CSS for Styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React and Babel CDNs -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .breathe-animation { animation: breathe 8s ease-in-out infinite; }
+        @keyframes breathe {
+            0%, 100% { transform: scale(1); opacity: 0.6; }
+            50% { transform: scale(1.4); opacity: 1; }
         }
-      } catch (err) {
-        console.error("Auth error:", err);
-      }
-    };
-    initAuth();
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-      setLoading(false);
-    });
-    return () => unsubscribe();
-  }, []);
+    </style>
+</head>
+<body>
+    <div id="root"></div>
 
-  // Data Syncing
-  useEffect(() => {
-    if (!user) return;
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
 
-    const statsDoc = doc(db, 'artifacts', appId, 'users', user.uid, 'stats', 'config');
-    const unsubStats = onSnapshot(statsDoc, (snapshot) => {
-      if (snapshot.exists()) {
-        const data = snapshot.data();
-        setCycleLength(data.cycleLength || 28);
-        setLastPeriodDate(data.lastPeriodDate || new Date().toISOString().split('T')[0]);
-        setWaterCount(data.waterCount || 0);
-      }
-    }, (err) => console.error("Stats fetch error:", err));
+        // --- Firebase Configuration ---
+        const firebaseConfig = JSON.parse(__firebase_config);
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'scribblelogue-tracker-101';
 
-    const journalCol = collection(db, 'artifacts', appId, 'users', user.uid, 'journal');
-    const unsubJournal = onSnapshot(journalCol, (snapshot) => {
-      const entries = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-      const sorted = entries.sort((a, b) => b.timestamp - a.timestamp);
-      setJournalEntries(sorted);
-    }, (err) => console.error("Journal fetch error:", err));
+        // --- SVGs for Icons ---
+        const Icon = ({ name, className = "w-5 h-5" }) => {
+            const icons = {
+                droplets: <path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z" />,
+                calendar: (
+                    <>
+                        <rect width="18" height="18" x="3" y="4" rx="2" ry="2" />
+                        <path d="M16 2v4M8 2v4M3 10h18" />
+                    </>
+                ),
+                book: (
+                    <>
+                        <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5z" />
+                        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                    </>
+                ),
+                wind: (
+                    <>
+                        <path d="M17.7 7.7a2.5 2.5 0 1 1 1.8 4.3H2" />
+                        <path d="M9.6 4.6A2 2 0 1 1 11 8H2" />
+                        <path d="M12.6 19.4A2 2 0 1 0 14 16H2" />
+                    </>
+                ),
+                settings: (
+                    <>
+                        <circle cx="12" cy="12" r="3" />
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                    </>
+                ),
+                plus: <path d="M12 5v14M5 12h14" />,
+                minus: <path d="M5 12h14" />,
+                sparkles: <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />,
+                heart: <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
+            };
+            return (
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                    {icons[name] || <circle cx="12" cy="12" r="10" />}
+                </svg>
+            );
+        };
 
-    return () => {
-      unsubStats();
-      unsubJournal();
-    };
-  }, [user]);
+        const CYCLE_INSIGHTS = {
+            menstrual: {
+                phase: "Menstrual Phase",
+                fact: "Hey kid, your body is in a 'reset' mode. It's the perfect time for restorative movement to clear your mind.",
+                food: "Focus on iron-rich foods like spinach or lentils for steady energy.",
+                walk: "A gentle 20-minute rhythmic walk in nature will release endorphins.",
+                mood: "Reflective and Intuitive",
+                waterNote: "2.5L today helps your body with circulation during this reset.",
+                breathePrompt: "Inhale for 4, Hold for 4, Exhale for 4. Ground your energy.",
+                bg: "bg-rose-50", accent: "text-rose-600", btn: "bg-rose-500"
+            },
+            follicular: {
+                phase: "Follicular Phase",
+                fact: "Hey kid, your estrogen is climbing! This naturally boosts your serotonin. Use this energy for a creative project.",
+                food: "Fermented foods like yogurt support estrogen metabolism for a glowing complexion.",
+                walk: "Power walk! 30 minutes at a brisk pace will capitalize on rising stamina.",
+                mood: "Energetic and Creative",
+                waterNote: "Aim for 2.2L to keep your cells hydrated for that rising estrogen glow.",
+                breathePrompt: "Deep belly breaths to fuel your creative fire.",
+                bg: "bg-blue-50", accent: "text-blue-600", btn: "bg-blue-500"
+            },
+            ovulation: {
+                phase: "Ovulatory Phase",
+                fact: "You are at your most social and confident today, Kid! Your peak enhances your strength and fluidity.",
+                food: "Light, hydrating foods like berries support high metabolic activity.",
+                walk: "Social walk! Invite a friend for a 40-minute stroll.",
+                mood: "Confident and Magnetic",
+                waterNote: "Try for 3L today to support your peak metabolic activity.",
+                breathePrompt: "Slow exhales to stay centered in your social power.",
+                bg: "bg-purple-50", accent: "text-purple-600", btn: "bg-purple-500"
+            },
+            luteal: {
+                phase: "Luteal Phase",
+                fact: "Progesterone is helping you feel more grounded. Kid, use this time to organize and find comfort in routine.",
+                food: "Complex carbs like sweet potatoes help maintain steady blood sugar.",
+                walk: "Grounding walk. 25 minutes of slow, intentional walking.",
+                mood: "Grounded and Task-Oriented",
+                waterNote: "Sipping 2.5L helps your body manage progesterone's fluid shifts.",
+                breathePrompt: "4-7-8 breathing: Inhale 4, Hold 7, Exhale 8. Embrace the calm.",
+                bg: "bg-amber-50", accent: "text-amber-600", btn: "bg-amber-500"
+            }
+        };
 
-  // Calculate current cycle day based on date and length
-  useEffect(() => {
-    if (!lastPeriodDate) return;
-    
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const start = new Date(lastPeriodDate);
-    start.setHours(0, 0, 0, 0);
-    
-    const diffTime = today.getTime() - start.getTime();
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-    
-    const currentDay = ((diffDays % cycleLength) + cycleLength) % cycleLength + 1;
-    setCycleDay(currentDay);
-  }, [lastPeriodDate, cycleLength]);
+        function App() {
+            const [user, setUser] = useState(null);
+            const [cycleDay, setCycleDay] = useState(1);
+            const [cycleLength, setCycleLength] = useState(28);
+            const [lastPeriodDate, setLastPeriodDate] = useState(new Date().toISOString().split('T')[0]);
+            const [waterCount, setWaterCount] = useState(0);
+            const [journalText, setJournalText] = useState("");
+            const [journalEntries, setJournalEntries] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [showSettings, setShowSettings] = useState(false);
+            const [isBreathing, setIsBreathing] = useState(false);
 
-  const updateConfig = async (updates) => {
-    if (!user) return;
-    const statsDoc = doc(db, 'artifacts', appId, 'users', user.uid, 'stats', 'config');
-    await setDoc(statsDoc, { ...updates }, { merge: true });
-  };
+            useEffect(() => {
+                const initAuth = async () => {
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await auth.signInWithCustomToken(__initial_auth_token);
+                    } else {
+                        await auth.signInAnonymously();
+                    }
+                };
+                initAuth();
+                const unsubscribe = auth.onAuthStateChanged((u) => {
+                    setUser(u);
+                    setLoading(false);
+                });
+                return () => unsubscribe();
+            }, []);
 
-  const saveJournal = async () => {
-    if (!user || !journalText.trim()) return;
-    try {
-      const journalCol = collection(db, 'artifacts', appId, 'users', user.uid, 'journal');
-      await addDoc(journalCol, {
-        text: journalText,
-        day: cycleDay,
-        timestamp: Date.now(),
-        dateString: new Date().toLocaleDateString()
-      });
-      setJournalText("");
-    } catch (err) {
-      console.error("Error saving journal:", err);
-    }
-  };
+            useEffect(() => {
+                if (!user) return;
+                const statsDoc = db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('stats').doc('config');
+                const unsubStats = statsDoc.onSnapshot((doc) => {
+                    if (doc.exists) {
+                        const data = doc.data();
+                        setCycleLength(data.cycleLength || 28);
+                        setLastPeriodDate(data.lastPeriodDate || new Date().toISOString().split('T')[0]);
+                        setWaterCount(data.waterCount || 0);
+                    }
+                });
 
-  const getPhaseData = (day, totalLength) => {
-    const progress = day / totalLength;
-    if (progress <= 0.2) return CYCLE_INSIGHTS.menstrual;
-    if (progress <= 0.45) return CYCLE_INSIGHTS.follicular;
-    if (progress <= 0.55) return CYCLE_INSIGHTS.ovulation;
-    return CYCLE_INSIGHTS.luteal;
-  };
+                const journalCol = db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('journal');
+                const unsubJournal = journalCol.onSnapshot((snapshot) => {
+                    const entries = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                    setJournalEntries(entries.sort((a, b) => b.timestamp - a.timestamp));
+                });
 
-  const currentPhase = getPhaseData(cycleDay, cycleLength);
+                return () => { unsubStats(); unsubJournal(); };
+            }, [user]);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-rose-50">
-        <div className="animate-pulse text-rose-400 flex flex-col items-center">
-          <Sparkles size={48} className="mb-4" />
-          <p className="font-medium">Syncing your cycle...</p>
-        </div>
-      </div>
-    );
-  }
+            useEffect(() => {
+                const today = new Date(); today.setHours(0,0,0,0);
+                const start = new Date(lastPeriodDate); start.setHours(0,0,0,0);
+                const diffDays = Math.floor((today.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+                setCycleDay(((diffDays % cycleLength) + cycleLength) % cycleLength + 1);
+            }, [lastPeriodDate, cycleLength]);
 
-  return (
-    <div className={`min-h-screen transition-colors duration-500 pb-12 ${currentPhase.bg} font-sans text-slate-800`}>
-      {/* Header */}
-      <header className="px-6 pt-8 pb-4 flex justify-between items-start max-w-2xl mx-auto">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Scribblelogue</h1>
-          <p className="text-slate-500 font-medium italic">Master your emotions, Kid ✨</p>
-        </div>
-        <button 
-          onClick={() => setShowSettings(!showSettings)}
-          className={`p-3 rounded-2xl border transition-all ${showSettings ? 'bg-slate-900 text-white border-slate-900' : 'bg-white border-slate-100 text-slate-400 shadow-sm'}`}
-        >
-          {showSettings ? <X size={20} /> : <Settings2 size={20} />}
-        </button>
-      </header>
+            const updateConfig = (updates) => {
+                if (!user) return;
+                db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('stats').doc('config')
+                  .set(updates, { merge: true });
+            };
 
-      <main className="px-6 space-y-6 max-w-2xl mx-auto relative">
-        
-        {/* Settings Panel */}
-        {showSettings && (
-          <div className="bg-white rounded-3xl p-6 shadow-xl border border-slate-100 animate-in slide-in-from-top-4 duration-300 z-10">
-            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-              <Calendar className="text-indigo-500" size={20} />
-              Cycle Settings
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Last Period Start</label>
-                <input 
-                  type="date"
-                  value={lastPeriodDate}
-                  onChange={(e) => updateConfig({ lastPeriodDate: e.target.value })}
-                  className="w-full p-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-indigo-100"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Cycle Length (Days)</label>
-                <div className="flex items-center gap-3 bg-slate-50 rounded-xl p-1">
-                  <button 
-                    onClick={() => updateConfig({ cycleLength: Math.max(20, cycleLength - 1) })}
-                    className="p-2 hover:bg-white rounded-lg transition-colors shadow-sm"
-                  >
-                    <Minus size={16} />
-                  </button>
-                  <span className="flex-1 text-center font-bold text-lg">{cycleLength}</span>
-                  <button 
-                    onClick={() => updateConfig({ cycleLength: Math.min(45, cycleLength + 1) })}
-                    className="p-2 hover:bg-white rounded-lg transition-colors shadow-sm"
-                  >
-                    <Plus size={16} />
-                  </button>
+            const saveJournal = async () => {
+                if (!user || !journalText.trim()) return;
+                await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('journal').add({
+                    text: journalText,
+                    day: cycleDay,
+                    timestamp: Date.now(),
+                    dateString: new Date().toLocaleDateString()
+                });
+                setJournalText("");
+            };
+
+            const currentPhase = useMemo(() => {
+                const progress = cycleDay / cycleLength;
+                if (progress <= 0.2) return CYCLE_INSIGHTS.menstrual;
+                if (progress <= 0.45) return CYCLE_INSIGHTS.follicular;
+                if (progress <= 0.55) return CYCLE_INSIGHTS.ovulation;
+                return CYCLE_INSIGHTS.luteal;
+            }, [cycleDay, cycleLength]);
+
+            if (loading) return <div className="flex items-center justify-center h-screen bg-rose-50 text-rose-400 font-bold">Syncing Scribblelogue...</div>;
+
+            return (
+                <div className={`min-h-screen transition-all duration-700 pb-12 ${currentPhase.bg} p-6`}>
+                    <div className="max-w-xl mx-auto space-y-6">
+                        <header className="flex justify-between items-center">
+                            <div>
+                                <h1 className="text-3xl font-black text-slate-900">Scribblelogue</h1>
+                                <p className="text-slate-500 font-medium">Master your emotions, Kid ✨</p>
+                            </div>
+                            <button onClick={() => setShowSettings(!showSettings)} className="p-3 bg-white rounded-2xl shadow-sm border border-slate-100">
+                                <Icon name="settings" className="text-slate-400" />
+                            </button>
+                        </header>
+
+                        {showSettings && (
+                            <div className="bg-white p-6 rounded-3xl shadow-xl border border-slate-100 animate-bounce-in">
+                                <h2 className="font-bold mb-4 flex items-center gap-2"><Icon name="calendar" className="text-indigo-500" /> Settings</h2>
+                                <div className="space-y-4">
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-bold text-slate-400 uppercase">Last Period</label>
+                                        <input type="date" value={lastPeriodDate} onChange={(e) => updateConfig({ lastPeriodDate: e.target.value })} className="w-full p-3 bg-slate-50 rounded-xl outline-none" />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-bold text-slate-400 uppercase">Cycle Length</label>
+                                        <div className="flex items-center bg-slate-50 rounded-xl p-1">
+                                            <button onClick={() => updateConfig({ cycleLength: cycleLength - 1 })} className="p-2"> - </button>
+                                            <span className="flex-1 text-center font-bold">{cycleLength} days</span>
+                                            <button onClick={() => updateConfig({ cycleLength: cycleLength + 1 })} className="p-2"> + </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="flex items-center justify-center gap-4">
+                            <div className="h-px bg-slate-200 flex-1"></div>
+                            <div className="bg-white px-4 py-1 rounded-full text-xs font-black text-slate-400 uppercase tracking-tighter shadow-sm">Cycle Day {cycleDay}</div>
+                            <div className="h-px bg-slate-200 flex-1"></div>
+                        </div>
+
+                        <section className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 relative overflow-hidden">
+                            <div className={`absolute -right-4 -top-4 opacity-5 ${currentPhase.accent}`}><Icon name="sparkles" className="w-40 h-40" /></div>
+                            <span className={`inline-block px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest mb-3 ${currentPhase.bg} ${currentPhase.accent}`}>{currentPhase.phase}</span>
+                            <h2 className="text-xl font-bold mb-2">Hormone Hack</h2>
+                            <p className="text-slate-600 text-sm leading-relaxed mb-6">{currentPhase.fact}</p>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100"><p className="text-[10px] font-bold text-slate-400">EAT</p><p className="text-xs font-semibold">{currentPhase.food}</p></div>
+                                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100"><p className="text-[10px] font-bold text-slate-400">MOVE</p><p className="text-xs font-semibold">{currentPhase.walk}</p></div>
+                            </div>
+                        </section>
+
+                        <section className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 text-center">
+                            <h3 className="font-bold flex items-center justify-center gap-2 mb-4"><Icon name="heart" className="text-rose-400" /> Breathe & Reset</h3>
+                            <div className={`mx-auto w-16 h-16 rounded-full flex items-center justify-center mb-4 ${currentPhase.bg} ${isBreathing ? 'breathe-animation' : ''}`}>
+                                <Icon name="wind" className={currentPhase.accent} />
+                            </div>
+                            <p className="text-xs text-slate-500 mb-4">{currentPhase.breathePrompt}</p>
+                            <button onClick={() => setIsBreathing(!isBreathing)} className={`w-full py-3 rounded-xl text-white font-bold text-xs uppercase tracking-widest transition-all ${isBreathing ? 'bg-slate-900' : currentPhase.btn}`}>
+                                {isBreathing ? 'Resetting...' : 'Start Session'}
+                            </button>
+                        </section>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <section className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100">
+                                <h3 className="font-bold text-sm mb-4 flex items-center gap-2"><Icon name="droplets" className="text-blue-500" /> Hydration</h3>
+                                <div className="flex gap-1 mb-4 h-12 items-end">
+                                    {[...Array(8)].map((_, i) => <div key={i} className={`flex-1 rounded-full transition-all ${i < waterCount ? 'bg-blue-400 h-10' : 'bg-blue-50 h-4'}`} />)}
+                                </div>
+                                <p className="text-[10px] text-blue-700 italic mb-4 leading-tight">{currentPhase.waterNote}</p>
+                                <div className="flex gap-2">
+                                    <button onClick={() => updateConfig({ waterCount: Math.max(0, waterCount - 1) })} className="flex-1 bg-slate-50 py-2 rounded-xl flex justify-center border border-slate-100"><Icon name="minus" /></button>
+                                    <button onClick={() => updateConfig({ waterCount: Math.min(12, waterCount + 1) })} className="flex-1 bg-blue-500 text-white py-2 rounded-xl flex justify-center shadow-lg shadow-blue-100"><Icon name="plus" /></button>
+                                </div>
+                            </section>
+
+                            <section className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 flex flex-col items-center justify-center text-center">
+                                <Icon name="wind" className="text-emerald-500 mb-2" />
+                                <p className="text-[10px] font-bold text-slate-400 uppercase">Vibe Check</p>
+                                <p className="text-lg font-bold text-slate-800 leading-tight">{currentPhase.mood}</p>
+                            </section>
+                        </div>
+
+                        <section className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
+                            <h3 className="font-bold mb-4 flex items-center gap-2"><Icon name="book" className="text-indigo-500" /> Journal</h3>
+                            <textarea value={journalText} onChange={(e) => setJournalText(e.target.value)} placeholder="How are you feeling, kid?" className="w-full h-24 bg-slate-50 rounded-2xl p-4 text-sm outline-none resize-none mb-4" />
+                            <button onClick={saveJournal} disabled={!journalText.trim()} className="w-full py-4 bg-indigo-500 text-white rounded-2xl font-bold shadow-lg shadow-indigo-100 disabled:opacity-50">Save Entry</button>
+                            
+                            {journalEntries.length > 0 && (
+                                <div className="mt-6 space-y-3">
+                                    {journalEntries.slice(0, 2).map(entry => (
+                                        <div key={entry.id} className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                            <div className="flex justify-between text-[10px] font-bold text-slate-400 mb-1"><span>{entry.dateString}</span><span>Day {entry.day}</span></div>
+                                            <p className="text-xs text-slate-600 italic">"{entry.text}"</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </section>
+                    </div>
                 </div>
-              </div>
-            </div>
-          </div>
-        )}
+            );
+        }
 
-        {/* Day Indicator */}
-        <div className="flex items-center justify-center gap-4 py-2">
-           <div className="h-px bg-slate-200 flex-1"></div>
-           <div className="bg-white px-6 py-2 rounded-full shadow-sm border border-slate-100">
-             <span className="text-sm font-bold text-slate-400 uppercase tracking-widest">Cycle Day </span>
-             <span className="text-lg font-black text-slate-800">{cycleDay}</span>
-           </div>
-           <div className="h-px bg-slate-200 flex-1"></div>
-        </div>
-
-        {/* Hormone Insight Card */}
-        <section className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 relative overflow-hidden transition-all hover:shadow-md">
-          <div className={`absolute top-0 right-0 p-4 opacity-10 ${currentPhase.accent}`}>
-            <Sparkles size={120} />
-          </div>
-          <div className="flex items-center gap-2 mb-3">
-            <span className={`text-xs font-bold px-3 py-1 rounded-full uppercase tracking-widest ${currentPhase.bg} ${currentPhase.accent}`}>
-              {currentPhase.phase}
-            </span>
-          </div>
-          <h2 className="text-2xl font-bold mb-2">Today's Hormone Hack</h2>
-          <p className="text-slate-600 leading-relaxed mb-6">
-            {currentPhase.fact}
-          </p>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="flex items-start gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
-              <Utensils className={currentPhase.accent} size={24} />
-              <div>
-                <p className="text-xs font-bold text-slate-400 uppercase">Eat This</p>
-                <p className="text-sm font-medium">{currentPhase.food}</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
-              <Footprints className={currentPhase.accent} size={24} />
-              <div>
-                <p className="text-xs font-bold text-slate-400 uppercase">Movement</p>
-                <p className="text-sm font-medium">{currentPhase.walk}</p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Breathe & Reset Tile */}
-        <section className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 relative overflow-hidden transition-all group">
-          <div className="flex justify-between items-start mb-4">
-            <div>
-              <h3 className="font-bold text-lg flex items-center gap-2">
-                <HeartPulse className="text-rose-400" size={20} />
-                Breathe & Reset
-              </h3>
-              <p className="text-sm text-slate-500 mt-1">Science-backed grounding</p>
-            </div>
-            <button 
-              onClick={() => setIsBreathing(!isBreathing)}
-              className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all ${isBreathing ? 'bg-rose-500 text-white ring-4 ring-rose-100' : 'bg-rose-50 text-rose-600 hover:bg-rose-100'}`}
-            >
-              {isBreathing ? 'Resetting...' : 'Start Now'}
-            </button>
-          </div>
-          
-          <div className="flex flex-col items-center justify-center py-4 text-center">
-            <div className={`transition-all duration-3000 ease-in-out ${isBreathing ? 'scale-150 opacity-100' : 'scale-100 opacity-60'}`}>
-               <Wind size={40} className={currentPhase.accent} />
-            </div>
-            <p className={`mt-6 text-sm font-medium transition-all ${isBreathing ? 'text-slate-900' : 'text-slate-400'}`}>
-              {currentPhase.breathePrompt}
-            </p>
-          </div>
-        </section>
-
-        {/* Interactive Stats (Water & Mood) */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Water Tracker */}
-          <section className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="font-bold text-lg flex items-center gap-2">
-                <Droplets className="text-blue-500" size={20} />
-                Hydration
-              </h3>
-              <span className="text-sm font-medium text-slate-400">{waterCount}/8 glasses</span>
-            </div>
-            
-            <div className="flex justify-center items-end gap-2 h-20 mb-6">
-              {[...Array(8)].map((_, i) => (
-                <div 
-                  key={i} 
-                  className={`w-4 rounded-full transition-all duration-500 ${i < waterCount ? 'bg-blue-400 h-16' : 'bg-blue-50 h-6'}`}
-                />
-              ))}
-            </div>
-
-            <div className="bg-blue-50/50 rounded-2xl p-3 mb-6 border border-blue-50">
-               <p className="text-xs text-blue-700 font-medium leading-relaxed">
-                 <span className="font-bold uppercase tracking-tighter">Pro Tip: </span>
-                 {currentPhase.waterNote}
-               </p>
-            </div>
-
-            <div className="flex gap-2">
-              <button 
-                onClick={() => updateConfig({ waterCount: Math.max(0, waterCount - 1) })}
-                className="flex-1 py-3 bg-slate-50 rounded-xl flex justify-center hover:bg-slate-100 border border-slate-100"
-              >
-                <Minus size={20} />
-              </button>
-              <button 
-                onClick={() => updateConfig({ waterCount: Math.min(15, waterCount + 1) })}
-                className="flex-1 py-3 bg-blue-500 text-white rounded-xl flex justify-center shadow-lg shadow-blue-100 hover:bg-blue-600 transition-all active:scale-95"
-              >
-                <Plus size={20} />
-              </button>
-            </div>
-          </section>
-
-          {/* Daily Mood Expectation */}
-          <section className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 flex flex-col justify-between">
-            <div>
-              <h3 className="font-bold text-lg flex items-center gap-2 mb-1">
-                <Wind className="text-emerald-500" size={20} />
-                Vibe Check
-              </h3>
-              <p className="text-sm text-slate-500 mb-4">Science-backed emotions...</p>
-            </div>
-            <div className="flex flex-col items-center py-4">
-              <div className={`p-5 rounded-3xl mb-3 shadow-inner ${currentPhase.bg} ${currentPhase.accent}`}>
-                <CheckCircle2 size={36} />
-              </div>
-              <p className="text-xl font-bold text-slate-800 tracking-tight">{currentPhase.mood}</p>
-            </div>
-          </section>
-        </div>
-
-        {/* Journal Section */}
-        <section className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
-          <h3 className="font-bold text-lg flex items-center gap-2 mb-4">
-            <BookOpen className="text-indigo-500" size={20} />
-            Daily Journal
-          </h3>
-          <textarea 
-            value={journalText}
-            onChange={(e) => setJournalText(e.target.value)}
-            placeholder={`How's your Day ${cycleDay} going, Kiddo?`}
-            className="w-full h-32 p-4 rounded-2xl bg-slate-50 border-none focus:ring-2 focus:ring-indigo-100 resize-none mb-4 placeholder:text-slate-300"
-          />
-          <button 
-            onClick={saveJournal}
-            disabled={!journalText.trim()}
-            className="w-full py-4 bg-indigo-500 text-white rounded-2xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-600 disabled:opacity-50 disabled:shadow-none transition-all active:scale-[0.98]"
-          >
-            Save Reflection
-          </button>
-
-          {/* Previous Entries */}
-          {journalEntries.length > 0 && (
-            <div className="mt-8 space-y-4">
-              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Recent Reflections</h4>
-              {journalEntries.slice(0, 3).map((entry) => (
-                <div key={entry.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-100 transition-all hover:bg-slate-100/50">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-xs font-bold text-slate-400">{entry.dateString}</span>
-                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-white text-slate-500 border border-slate-100 uppercase">Day {entry.day}</span>
-                  </div>
-                  <p className="text-sm text-slate-700 italic leading-relaxed">"{entry.text}"</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-      </main>
-
-      <footer className="text-center mt-12 text-slate-400 text-xs px-6">
-        <p className="max-w-xs mx-auto">Track your natural biological markers to learn supportive, science-backed lifestyle nudges.</p>
-        <p className="mt-4 font-bold uppercase tracking-widest text-[10px]">scribblelogue v1.1</p>
-      </footer>
-    </div>
-  );
-}
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
