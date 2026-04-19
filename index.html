@@ -1,0 +1,407 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { 
+  Droplets, 
+  Calendar, 
+  BookOpen, 
+  Wind, 
+  ChevronLeft, 
+  ChevronRight, 
+  Plus, 
+  Minus, 
+  CheckCircle2,
+  Sparkles,
+  Utensils,
+  Footprints,
+  Settings2,
+  X
+} from 'lucide-react';
+import { initializeApp } from 'firebase/app';
+import { 
+  getFirestore, 
+  doc, 
+  setDoc, 
+  getDoc, 
+  collection, 
+  onSnapshot, 
+  query, 
+  orderBy,
+  addDoc
+} from 'firebase/firestore';
+import { 
+  getAuth, 
+  signInAnonymously, 
+  signInWithCustomToken, 
+  onAuthStateChanged 
+} from 'firebase/auth';
+
+// --- Firebase Configuration ---
+const firebaseConfig = JSON.parse(__firebase_config);
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'lumina-tracker-101';
+
+// --- Science-Backed Positive Data ---
+const CYCLE_INSIGHTS = {
+  menstrual: {
+    phase: "Menstrual Phase",
+    hormone: "Progesterone Drop",
+    fact: "Snigdha, your body is in a 'reset' mode. Since your progesterone has dropped, it's the perfect time for restorative movement to clear your mind.",
+    food: "Focus on iron-rich foods like spinach or lentils to keep your oxygen levels high and energy steady.",
+    walk: "A gentle 20-minute rhythmic walk in nature will help release endorphins.",
+    mood: "Reflective and Intuitive",
+    bg: "bg-rose-50",
+    accent: "text-rose-600"
+  },
+  follicular: {
+    phase: "Follicular Phase",
+    hormone: "Estrogen Rising",
+    fact: "Snigdha, your estrogen is climbing! This naturally boosts your serotonin. Use this energy to try a new workout or tackle a creative project.",
+    food: "Fermented foods like yogurt or kimchi support estrogen metabolism for a glowing complexion.",
+    walk: "Power walk! 30 minutes at a brisk pace will capitalize on your rising stamina.",
+    mood: "Energetic and Creative",
+    bg: "bg-blue-50",
+    accent: "text-blue-600"
+  },
+  ovulation: {
+    phase: "Ovulatory Phase",
+    hormone: "LH & Testosterone Peak",
+    fact: "You are at your most social and confident today, Snigdha! Your testosterone peak enhances your strength and verbal fluidity.",
+    food: "Light, hydrating foods like berries and cucumber support your body’s high metabolic activity.",
+    walk: "Social walk! Invite a friend for a 40-minute stroll; your communication skills are peaking.",
+    mood: "Confident and Magnetic",
+    bg: "bg-purple-50",
+    accent: "text-purple-600"
+  },
+  luteal: {
+    phase: "Luteal Phase",
+    hormone: "Progesterone Peak",
+    fact: "Progesterone is the 'chilled out' hormone. It’s helping you feel more grounded. Snigdha, use this time to organize and find comfort in routine.",
+    food: "Complex carbs like sweet potatoes help maintain steady blood sugar and keep those feel-good hormones stable.",
+    walk: "Grounding walk. 25 minutes of slow, intentional walking helps maintain your natural calm.",
+    mood: "Grounded and Task-Oriented",
+    bg: "bg-amber-50",
+    accent: "text-amber-600"
+  }
+};
+
+export default function App() {
+  const [user, setUser] = useState(null);
+  const [cycleDay, setCycleDay] = useState(1);
+  const [cycleLength, setCycleLength] = useState(28);
+  const [lastPeriodDate, setLastPeriodDate] = useState(new Date().toISOString().split('T')[0]);
+  const [waterCount, setWaterCount] = useState(0);
+  const [journalText, setJournalText] = useState("");
+  const [journalEntries, setJournalEntries] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showSettings, setShowSettings] = useState(false);
+
+  // Auth Initialization
+  useEffect(() => {
+    const initAuth = async () => {
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
+      } catch (err) {
+        console.error("Auth error:", err);
+      }
+    };
+    initAuth();
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+      setLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Data Syncing
+  useEffect(() => {
+    if (!user) return;
+
+    const statsDoc = doc(db, 'artifacts', appId, 'users', user.uid, 'stats', 'config');
+    const unsubStats = onSnapshot(statsDoc, (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        setCycleLength(data.cycleLength || 28);
+        setLastPeriodDate(data.lastPeriodDate || new Date().toISOString().split('T')[0]);
+        setWaterCount(data.waterCount || 0);
+      }
+    });
+
+    const journalCol = collection(db, 'artifacts', appId, 'users', user.uid, 'journal');
+    const unsubJournal = onSnapshot(journalCol, (snapshot) => {
+      const entries = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      const sorted = entries.sort((a, b) => b.timestamp - a.timestamp);
+      setJournalEntries(sorted);
+    }, (err) => console.error(err));
+
+    return () => {
+      unsubStats();
+      unsubJournal();
+    };
+  }, [user]);
+
+  // Calculate current cycle day based on date and length
+  useEffect(() => {
+    if (!lastPeriodDate) return;
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const start = new Date(lastPeriodDate);
+    start.setHours(0, 0, 0, 0);
+    
+    const diffTime = today.getTime() - start.getTime();
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    
+    // Calculate day within the cycle (1 to cycleLength)
+    const currentDay = ((diffDays % cycleLength) + cycleLength) % cycleLength + 1;
+    setCycleDay(currentDay);
+  }, [lastPeriodDate, cycleLength]);
+
+  const updateConfig = async (updates) => {
+    if (!user) return;
+    const statsDoc = doc(db, 'artifacts', appId, 'users', user.uid, 'stats', 'config');
+    await setDoc(statsDoc, { ...updates }, { merge: true });
+  };
+
+  const saveJournal = async () => {
+    if (!user || !journalText.trim()) return;
+    try {
+      const journalCol = collection(db, 'artifacts', appId, 'users', user.uid, 'journal');
+      await addDoc(journalCol, {
+        text: journalText,
+        day: cycleDay,
+        timestamp: Date.now(),
+        dateString: new Date().toLocaleDateString()
+      });
+      setJournalText("");
+    } catch (err) {
+      console.error("Error saving journal:", err);
+    }
+  };
+
+  const getPhaseData = (day, totalLength) => {
+    // Proportional phase calculation
+    const progress = day / totalLength;
+    if (progress <= 0.2) return CYCLE_INSIGHTS.menstrual; // First 20%
+    if (progress <= 0.45) return CYCLE_INSIGHTS.follicular; // Up to 45%
+    if (progress <= 0.55) return CYCLE_INSIGHTS.ovulation; // Mid-cycle peak
+    return CYCLE_INSIGHTS.luteal; // Second half
+  };
+
+  const currentPhase = getPhaseData(cycleDay, cycleLength);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-rose-50">
+        <div className="animate-pulse text-rose-400 flex flex-col items-center">
+          <Sparkles size={48} className="mb-4" />
+          <p className="font-medium">Syncing your cycle...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`min-h-screen transition-colors duration-500 pb-12 ${currentPhase.bg} font-sans text-slate-800`}>
+      {/* Header */}
+      <header className="px-6 pt-8 pb-4 flex justify-between items-start max-w-2xl mx-auto">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Lumina</h1>
+          <p className="text-slate-500 font-medium italic">Empowering your rhythm, Snigdha ✨</p>
+        </div>
+        <button 
+          onClick={() => setShowSettings(!showSettings)}
+          className={`p-3 rounded-2xl border transition-all ${showSettings ? 'bg-slate-900 text-white border-slate-900' : 'bg-white border-slate-100 text-slate-400 shadow-sm'}`}
+        >
+          {showSettings ? <X size={20} /> : <Settings2 size={20} />}
+        </button>
+      </header>
+
+      <main className="px-6 space-y-6 max-w-2xl mx-auto relative">
+        
+        {/* Settings Panel */}
+        {showSettings && (
+          <div className="bg-white rounded-3xl p-6 shadow-xl border border-slate-100 animate-in slide-in-from-top-4 duration-300 z-10">
+            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+              <Calendar className="text-indigo-500" size={20} />
+              Cycle Settings
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Last Period Start</label>
+                <input 
+                  type="date"
+                  value={lastPeriodDate}
+                  onChange={(e) => updateConfig({ lastPeriodDate: e.target.value })}
+                  className="w-full p-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-indigo-100"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Cycle Length (Days)</label>
+                <div className="flex items-center gap-3 bg-slate-50 rounded-xl p-1">
+                  <button 
+                    onClick={() => updateConfig({ cycleLength: Math.max(20, cycleLength - 1) })}
+                    className="p-2 hover:bg-white rounded-lg transition-colors shadow-sm"
+                  >
+                    <Minus size={16} />
+                  </button>
+                  <span className="flex-1 text-center font-bold text-lg">{cycleLength}</span>
+                  <button 
+                    onClick={() => updateConfig({ cycleLength: Math.min(45, cycleLength + 1) })}
+                    className="p-2 hover:bg-white rounded-lg transition-colors shadow-sm"
+                  >
+                    <Plus size={16} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Day Indicator */}
+        <div className="flex items-center justify-center gap-4 py-2">
+           <div className="h-px bg-slate-200 flex-1"></div>
+           <div className="bg-white px-6 py-2 rounded-full shadow-sm border border-slate-100">
+             <span className="text-sm font-bold text-slate-400 uppercase tracking-widest">Cycle Day </span>
+             <span className="text-lg font-black text-slate-800">{cycleDay}</span>
+           </div>
+           <div className="h-px bg-slate-200 flex-1"></div>
+        </div>
+
+        {/* Hormone Insight Card */}
+        <section className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 relative overflow-hidden transition-all hover:shadow-md">
+          <div className={`absolute top-0 right-0 p-4 opacity-10 ${currentPhase.accent}`}>
+            <Sparkles size={120} />
+          </div>
+          <div className="flex items-center gap-2 mb-3">
+            <span className={`text-xs font-bold px-3 py-1 rounded-full uppercase tracking-widest ${currentPhase.bg} ${currentPhase.accent}`}>
+              {currentPhase.phase}
+            </span>
+          </div>
+          <h2 className="text-2xl font-bold mb-2">Today's Hormone Hack</h2>
+          <p className="text-slate-600 leading-relaxed mb-6">
+            {currentPhase.fact}
+          </p>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex items-start gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+              <Utensils className={currentPhase.accent} size={24} />
+              <div>
+                <p className="text-xs font-bold text-slate-400 uppercase">Eat This</p>
+                <p className="text-sm font-medium">{currentPhase.food}</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+              <Footprints className={currentPhase.accent} size={24} />
+              <div>
+                <p className="text-xs font-bold text-slate-400 uppercase">Movement</p>
+                <p className="text-sm font-medium">{currentPhase.walk}</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Interactive Stats (Water & Mood) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Water Tracker */}
+          <section className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="font-bold text-lg flex items-center gap-2">
+                <Droplets className="text-blue-500" size={20} />
+                Hydration
+              </h3>
+              <span className="text-sm font-medium text-slate-400">{waterCount}/8 glasses</span>
+            </div>
+            
+            <div className="flex justify-center items-end gap-2 h-20 mb-6">
+              {[...Array(8)].map((_, i) => (
+                <div 
+                  key={i} 
+                  className={`w-4 rounded-full transition-all duration-500 ${i < waterCount ? 'bg-blue-400 h-16' : 'bg-blue-50 h-6'}`}
+                />
+              ))}
+            </div>
+
+            <div className="flex gap-2">
+              <button 
+                onClick={() => updateConfig({ waterCount: Math.max(0, waterCount - 1) })}
+                className="flex-1 py-3 bg-slate-50 rounded-xl flex justify-center hover:bg-slate-100 border border-slate-100"
+              >
+                <Minus size={20} />
+              </button>
+              <button 
+                onClick={() => updateConfig({ waterCount: Math.min(15, waterCount + 1) })}
+                className="flex-1 py-3 bg-blue-500 text-white rounded-xl flex justify-center shadow-lg shadow-blue-100 hover:bg-blue-600 transition-all active:scale-95"
+              >
+                <Plus size={20} />
+              </button>
+            </div>
+          </section>
+
+          {/* Daily Mood Expectation */}
+          <section className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 flex flex-col justify-between">
+            <div>
+              <h3 className="font-bold text-lg flex items-center gap-2 mb-1">
+                <Wind className="text-emerald-500" size={20} />
+                Vibe Check
+              </h3>
+              <p className="text-sm text-slate-500 mb-4">Science-backed mood...</p>
+            </div>
+            <div className="flex flex-col items-center py-4">
+              <div className={`p-5 rounded-3xl mb-3 shadow-inner ${currentPhase.bg} ${currentPhase.accent}`}>
+                <CheckCircle2 size={36} />
+              </div>
+              <p className="text-xl font-bold text-slate-800 tracking-tight">{currentPhase.mood}</p>
+            </div>
+          </section>
+        </div>
+
+        {/* Journal Section */}
+        <section className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
+          <h3 className="font-bold text-lg flex items-center gap-2 mb-4">
+            <BookOpen className="text-indigo-500" size={20} />
+            Daily Journal
+          </h3>
+          <textarea 
+            value={journalText}
+            onChange={(e) => setJournalText(e.target.value)}
+            placeholder={`How's your Day ${cycleDay} going, Snigdha?`}
+            className="w-full h-32 p-4 rounded-2xl bg-slate-50 border-none focus:ring-2 focus:ring-indigo-100 resize-none mb-4 placeholder:text-slate-300"
+          />
+          <button 
+            onClick={saveJournal}
+            disabled={!journalText.trim()}
+            className="w-full py-4 bg-indigo-500 text-white rounded-2xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-600 disabled:opacity-50 disabled:shadow-none transition-all active:scale-[0.98]"
+          >
+            Save Reflection
+          </button>
+
+          {/* Previous Entries */}
+          {journalEntries.length > 0 && (
+            <div className="mt-8 space-y-4">
+              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Recent Reflections</h4>
+              {journalEntries.slice(0, 3).map((entry) => (
+                <div key={entry.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-100 transition-all hover:bg-slate-100/50">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-xs font-bold text-slate-400">{entry.dateString}</span>
+                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-white text-slate-500 border border-slate-100 uppercase">Day {entry.day}</span>
+                  </div>
+                  <p className="text-sm text-slate-700 italic leading-relaxed">"{entry.text}"</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </main>
+
+      <footer className="text-center mt-12 text-slate-400 text-xs px-6">
+        <p className="max-w-xs mx-auto">Lumina tracks your natural biological markers to provide supportive, science-backed lifestyle nudges.</p>
+        <p className="mt-4 font-bold uppercase tracking-widest text-[10px]">Lumina v2.0</p>
+      </footer>
+    </div>
+  );
+}
